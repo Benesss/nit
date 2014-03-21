@@ -55,7 +55,7 @@ redef class ToolContext
 	# --no-stacktrace
 	var opt_no_stacktrace: OptionBool = new OptionBool("Disables libunwind and generation of C stack traces (can be problematic when compiling to targets such as Android or NaCl)", "--no-stacktrace")
 	# --stack-trace-C-to-Nit-name-binding
-	var opt_stacktrace: OptionBool = new OptionBool("Enables the use of gperf to bind C to Nit function names when encountering a Stack trace at runtime", "--nit-stacktrace")
+	var opt_c_stacktrace: OptionBool = new OptionBool("Disables the use of gperf to bind C to Nit function names when encountering a Stack trace at runtime", "--c-stacktrace")
 
 	redef init
 	do
@@ -63,7 +63,7 @@ redef class ToolContext
 		self.option_context.add_option(self.opt_output, self.opt_no_cc, self.opt_make_flags, self.opt_compile_dir, self.opt_hardening, self.opt_no_shortcut_range)
 		self.option_context.add_option(self.opt_no_check_covariance, self.opt_no_check_initialization, self.opt_no_check_assert, self.opt_no_check_autocast, self.opt_no_check_other)
 		self.option_context.add_option(self.opt_typing_test_metrics)
-		self.option_context.add_option(self.opt_stacktrace)
+		self.option_context.add_option(self.opt_c_stacktrace)
 		self.option_context.add_option(self.opt_no_stacktrace)
 	end
 end
@@ -71,8 +71,8 @@ end
 redef class ModelBuilder
 	redef init(model, toolcontext)
 	do
-		if toolcontext.opt_no_stacktrace.value and toolcontext.opt_stacktrace.value then
-			print "Cannot use --nit-stacktrace when --no-stacktrace is activated"
+		if toolcontext.opt_no_stacktrace.value and toolcontext.opt_c_stacktrace.value then
+			print "Cannot use --c-stacktrace when --no-stacktrace is activated"
 			exit(1)
 		end
 
@@ -189,7 +189,7 @@ class MakefileToolchain
 
 	fun write_files(compiler: AbstractCompiler, compile_dir: String, cfiles: Array[String])
 	do
-		if self.toolcontext.opt_stacktrace.value then compiler.build_c_to_nit_bindings
+		if not self.toolcontext.opt_c_stacktrace.value then compiler.build_c_to_nit_bindings
 
 		# Add gc_choser.h to aditionnal bodies
 		var gc_chooser = new ExternCFile("gc_chooser.c", "-DWITH_LIBGC")
@@ -498,7 +498,7 @@ abstract class AbstractCompiler
 	fun compile_main_function
 	do
 		var v = self.new_visitor
-		if modelbuilder.toolcontext.opt_stacktrace.value then
+		if not modelbuilder.toolcontext.opt_c_stacktrace.value then
 			v.add_decl("#include \"c_functions_hash.h\"")
 		end
 		v.add_decl("#include <signal.h>")
@@ -541,7 +541,7 @@ abstract class AbstractCompiler
 			v.add_decl("printf(\"-------------------------------------------------\\n\");")
 			v.add_decl("while (unw_step(&cursor) > 0) \{")
 			v.add_decl("	unw_get_proc_name(&cursor, procname, 100, &ip);")
-			if modelbuilder.toolcontext.opt_stacktrace.value then
+			if not modelbuilder.toolcontext.opt_c_stacktrace.value then
 			v.add_decl("	const C_Nit_Names* recv = get_nit_name(procname, strlen(procname));")
 			v.add_decl("	if (recv != 0)\{")
 			v.add_decl("		printf(\"` %s\\n\", recv->nit_name);")
